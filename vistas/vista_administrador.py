@@ -2,6 +2,7 @@ import streamlit as st
 from datos.conexion import SessionLocal
 from datos.tablas_sql import Estudiante, Curso, ActividadEvaluativa, Comision, ComisionActividad, Inscripcion, Nota, UsuarioSistema
 from datetime import date
+from utils.seguridad import generar_hash
 
 def vista_administrador():
     st.markdown("<h2 style='color: #4F46E5;'>💼 Panel de Control Administrativo (Senior)</h2>", unsafe_allow_html=True)
@@ -200,17 +201,28 @@ def vista_administrador():
                 pwd = f2.text_input("Password", type="password")
                 
                 if st.form_submit_button("Guardar Registro"):
-                    try:
-                        ne = Estudiante(nombre=nom, apellido=ape, e_mail=mail, dni=dni, legajo=leg, telefono=tel if tel else None, activo=1)
-                        db.add(ne)
-                        db.flush()
-                        db.add(UsuarioSistema(username=usr, password_hash=pwd, rol="estudiante", id_estudiante=ne.id_estudiante))
-                        db.commit()
-                        st.success("Matriculado con éxito.")
-                        st.rerun()
-                    except Exception as ex:
-                        db.rollback()
-                        st.error(f"Clave duplicada o error: {ex}")
+                    if nom and ape and mail and dni and usr and pwd:
+                        try:
+                            ne = Estudiante(nombre=nom, apellido=ape, e_mail=mail, dni=dni, legajo=leg, telefono=tel if tel else None, activo=1)
+                            db.add(ne)
+                            db.flush()
+                            
+                            password_encriptada = generar_hash(pwd)
+                            db.add(UsuarioSistema(
+                                username=usr, 
+                                password_hash=password_encriptada, 
+                                rol="estudiante", 
+                                id_estudiante=ne.id_estudiante
+                            ))
+                            
+                            db.commit()
+                            st.success("Matriculado con éxito.")
+                            st.rerun()
+                        except Exception as ex:
+                            db.rollback()
+                            st.error(f"Clave duplicada o error de consistencia: {ex}")
+                    else:
+                        st.warning("Completá todos los campos obligatorios para dar el alta.")
         
         st.markdown("#### Alumnos en Sistema")
         alumnos_todos = db.query(Estudiante).all()
